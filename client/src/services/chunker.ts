@@ -1,4 +1,4 @@
-import { TextChunk, SentenceItem } from "../types";
+import type { TextChunk, SentenceItem } from "../types";
 
 const ABBREVIATIONS = new Set([
   "gs", "pgs", "ts", "ths", "bs", "thầy", "cô", "đ/c", "đc", "tp", "tt",
@@ -147,3 +147,38 @@ export function localChunkText(text: string, maxChars: number = 800): TextChunk[
   pushChunk();
   return chunks;
 }
+
+/**
+ * Xác định vị trí câu đang được phát trong một chunk dựa trên currentTime và duration
+ */
+export function findActiveSentenceIndex(
+  chunk: TextChunk | null,
+  currentTime: number,
+  duration: number
+): number {
+  if (!chunk || duration <= 0 || !chunk.sentences || chunk.sentences.length === 0) {
+    return -1;
+  }
+
+  const progress = Math.min(1.0, Math.max(0, currentTime / duration));
+  const totalChars = chunk.charCount || 1;
+
+  let accumulatedChars = 0;
+  for (let i = 0; i < chunk.sentences.length; i++) {
+    const s = chunk.sentences[i];
+    const startRatio = accumulatedChars / totalChars;
+    accumulatedChars += s.charCount + 1;
+    const endRatio = accumulatedChars / totalChars;
+
+    if (progress >= startRatio && progress <= endRatio) {
+      return i;
+    }
+  }
+
+  if (progress >= 0.95) {
+    return chunk.sentences.length - 1;
+  }
+
+  return -1;
+}
+

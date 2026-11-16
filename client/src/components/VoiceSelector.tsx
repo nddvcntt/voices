@@ -1,6 +1,6 @@
-import React, { useState, useRef } from "react";
-import { TtsVoice } from "../types";
-import { Mic, Play, Pause, Check, SlidersHorizontal, Volume2, Sparkles, Filter } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import type { TtsVoice } from "../types";
+import { Mic, Play, Pause, Check, SlidersHorizontal, Volume2, Sparkles } from "lucide-react";
 import { api } from "../services/api";
 
 interface VoiceSelectorProps {
@@ -28,6 +28,21 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
 
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentPreviewUrlRef = useRef<string | null>(null);
+
+  // Dọn dẹp âm thanh preview khi unmount để tránh rò rỉ bộ nhớ
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.src = "";
+      }
+      if (currentPreviewUrlRef.current) {
+        URL.revokeObjectURL(currentPreviewUrlRef.current);
+        currentPreviewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Lọc danh sách giọng đọc
   const filteredVoices = voices.filter((v) => {
@@ -44,12 +59,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
   const handlePreview = async (voice: TtsVoice, e: React.MouseEvent) => {
     e.stopPropagation();
 
+    // Nếu đang phát chính giọng này thì dừng lại
     if (previewingVoice === voice.id) {
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
       setPreviewingVoice(null);
       return;
+    }
+
+    // Thu hồi URL cũ nếu có
+    if (currentPreviewUrlRef.current) {
+      URL.revokeObjectURL(currentPreviewUrlRef.current);
+      currentPreviewUrlRef.current = null;
     }
 
     setPreviewingVoice(voice.id);
@@ -61,13 +83,20 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
         speed: 1.0,
       });
 
+      currentPreviewUrlRef.current = url;
+
       if (!previewAudioRef.current) {
         previewAudioRef.current = new Audio();
       }
       previewAudioRef.current.src = url;
-      previewAudioRef.current.play();
+      previewAudioRef.current.play().catch(console.error);
+
       previewAudioRef.current.onended = () => {
         setPreviewingVoice(null);
+        if (currentPreviewUrlRef.current) {
+          URL.revokeObjectURL(currentPreviewUrlRef.current);
+          currentPreviewUrlRef.current = null;
+        }
       };
     } catch (err) {
       console.error("Preview failed:", err);
@@ -114,6 +143,7 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
             ].map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setGenderFilter(tab.id)}
                 className={`flex-1 py-1 rounded-md text-2xs font-medium transition ${
                   genderFilter === tab.id
@@ -139,6 +169,7 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
             ].map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setRegionFilter(tab.id)}
                 className={`flex-1 py-1 rounded-md text-2xs font-medium transition ${
                   regionFilter === tab.id
@@ -251,6 +282,7 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
               {[0.75, 1.0, 1.25].map((s) => (
                 <button
                   key={s}
+                  type="button"
                   onClick={() => onSpeedChange(s)}
                   className={`px-1.5 py-0.5 rounded text-3xs font-semibold ${
                     speed === s ? "bg-blue-600 text-white" : "bg-studio-800 text-slate-400 hover:text-white"

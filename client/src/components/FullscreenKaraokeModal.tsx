@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { TextChunk } from "../types";
-import { X, Play, Pause, RotateCcw, RotateCw, SkipBack, SkipForward, Radio } from "lucide-react";
+import type { TextChunk } from "../types";
+import { X, Play, Pause, SkipBack, SkipForward, Radio } from "lucide-react";
 import { WaveformVisualizer } from "./WaveformVisualizer";
+import { findActiveSentenceIndex } from "../services/chunker";
 
 interface FullscreenKaraokeModalProps {
   isOpen: boolean;
@@ -53,28 +54,7 @@ export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
   if (!isOpen) return null;
 
   const currentChunk = activeChunkIndex !== null ? chunks[activeChunkIndex] : null;
-
-  let activeSentenceIndex = -1;
-  if (currentChunk && duration > 0 && currentChunk.sentences.length > 0) {
-    const progress = Math.min(1.0, Math.max(0, currentTime / duration));
-    const totalChars = currentChunk.charCount || 1;
-
-    let accumulatedChars = 0;
-    for (let i = 0; i < currentChunk.sentences.length; i++) {
-      const s = currentChunk.sentences[i];
-      const startRatio = accumulatedChars / totalChars;
-      accumulatedChars += s.charCount + 1;
-      const endRatio = accumulatedChars / totalChars;
-
-      if (progress >= startRatio && progress <= endRatio) {
-        activeSentenceIndex = i;
-        break;
-      }
-    }
-    if (activeSentenceIndex === -1 && progress >= 0.95) {
-      activeSentenceIndex = currentChunk.sentences.length - 1;
-    }
-  }
+  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, currentTime, duration);
 
   return (
     <div className="fixed inset-0 z-50 bg-studio-950/98 backdrop-blur-3xl flex flex-col justify-between overflow-hidden text-slate-100 p-6 md:p-12 animate-in fade-in duration-200">

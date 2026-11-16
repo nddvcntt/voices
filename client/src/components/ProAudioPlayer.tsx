@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { TextChunk } from "../types";
+import type { TextChunk } from "../types";
 import {
   Play,
   Pause,
@@ -14,9 +14,7 @@ import {
   Repeat,
   Repeat1,
   Maximize2,
-  Mic,
-  Sparkles,
-  Layers
+  Mic
 } from "lucide-react";
 import { WaveformVisualizer } from "./WaveformVisualizer";
 
@@ -83,8 +81,6 @@ export const ProAudioPlayer: React.FC<ProAudioPlayerProps> = ({
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
-
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-studio-950/95 border-t border-studio-800/90 backdrop-blur-2xl px-4 lg:px-8 py-3.5 shadow-2xl shadow-black/80">

@@ -33,9 +33,12 @@ export async function mergeAudioBuffers(
       inputFiles.push(filePath);
     }
 
-    // Tạo file danh sách cho ffmpeg concat
+    // Tạo file danh sách cho ffmpeg concat (escape dấu nháy đơn)
     const listContent = inputFiles
-      .map(file => `file '${file.replace(/\\/g, "/")}'`)
+      .map(file => {
+        const safePath = file.replace(/\\/g, "/").replace(/'/g, "'\\''");
+        return `file '${safePath}'`;
+      })
       .join("\n");
     fs.writeFileSync(listFilePath, listContent, "utf8");
 

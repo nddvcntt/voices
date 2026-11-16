@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   FileText,
   Clipboard,
@@ -6,9 +6,7 @@ import {
   Sparkles,
   Scissors,
   Clock,
-  BookOpen,
-  CheckCircle,
-  HelpCircle
+  BookOpen
 } from "lucide-react";
 
 interface TextEditorProps {
@@ -51,8 +49,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
   maxChars,
   onChangeMaxChars,
 }) => {
-  const [copied, setCopied] = useState(false);
-
   // Thống kê văn bản
   const charCount = text.length;
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;

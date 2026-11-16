@@ -8,7 +8,7 @@ import { KaraokeView } from "./components/KaraokeView";
 import { ProAudioPlayer } from "./components/ProAudioPlayer";
 import { FullscreenKaraokeModal } from "./components/FullscreenKaraokeModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
-import { TtsVoice, TextChunk } from "./types";
+import type { TtsVoice, TextChunk } from "./types";
 import { api } from "./services/api";
 import { localChunkText } from "./services/chunker";
 import { useAudioPlayer } from "./hooks/useAudioPlayer";
@@ -122,7 +122,6 @@ export const App: React.FC = () => {
 
   // 6. Audio Player Hook
   const {
-    audioRef,
     currentChunkIndex,
     isPlaying,
     currentTime,

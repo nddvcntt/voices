@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { TextChunk } from "../types";
+import type { TextChunk } from "../types";
 import {
-  Mic,
-  Volume2,
   Maximize2,
-  Play,
-  Pause,
-  Sparkles,
   Radio,
   ArrowDownCircle,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Pause,
+  Play
 } from "lucide-react";
 import { WaveformVisualizer } from "./WaveformVisualizer";
+import { findActiveSentenceIndex } from "../services/chunker";
 
 interface KaraokeViewProps {
   chunks: TextChunk[];
@@ -63,29 +61,7 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
 
   // Tính câu nào đang được đọc trong chunk hiện tại
   const currentChunk = activeChunkIndex !== null ? chunks[activeChunkIndex] : null;
-
-  let activeSentenceIndex = -1;
-  if (currentChunk && duration > 0 && currentChunk.sentences.length > 0) {
-    const progress = Math.min(1.0, Math.max(0, currentTime / duration));
-    const totalChars = currentChunk.charCount || 1;
-
-    let accumulatedChars = 0;
-    for (let i = 0; i < currentChunk.sentences.length; i++) {
-      const s = currentChunk.sentences[i];
-      const startRatio = accumulatedChars / totalChars;
-      accumulatedChars += s.charCount + 1;
-      const endRatio = accumulatedChars / totalChars;
-
-      if (progress >= startRatio && progress <= endRatio) {
-        activeSentenceIndex = i;
-        break;
-      }
-    }
-    // Fallback nếu ở cuối
-    if (activeSentenceIndex === -1 && progress >= 0.95) {
-      activeSentenceIndex = currentChunk.sentences.length - 1;
-    }
-  }
+  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, currentTime, duration);
 
   return (
     <div className="bg-studio-900/70 rounded-2xl border border-studio-800 p-6 backdrop-blur-xl space-y-5">
@@ -153,7 +129,11 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
               ref={isThisChunkActive ? activeChunkRef : null}
               onClick={() => {
                 if (isChunkReady) {
-                  onPlayChunk(chunkIdx);
+                  if (isThisChunkActive) {
+                    onTogglePlay();
+                  } else {
+                    onPlayChunk(chunkIdx);
+                  }
                 }
               }}
               className={`p-6 rounded-2xl border transition-all duration-300 cursor-pointer relative group ${
@@ -189,11 +169,12 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {isThisChunkActive && isPlaying && (
+                  {isThisChunkActive && (
                     <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30">
-                      <WaveformVisualizer isPlaying={true} barCount={16} height={18} />
-                      <span className="text-3xs font-bold text-blue-300 uppercase tracking-wider animate-pulse">
-                        Đang phát
+                      <WaveformVisualizer isPlaying={isPlaying} barCount={16} height={18} />
+                      <span className="text-3xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1">
+                        {isPlaying ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
+                        {isPlaying ? "Đang phát" : "Tạm dừng"}
                       </span>
                     </div>
                   )}
@@ -235,7 +216,7 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
               {/* Bottom Quick Play Tooltip */}
               <div className="mt-3 pt-2 flex items-center justify-between text-3xs text-slate-400 border-t border-studio-800/40">
                 <span className="flex items-center gap-1 text-slate-400">
-                  <Eye className="w-3 h-3" /> Nhấn vào đoạn này để nghe phát thử
+                  <Eye className="w-3 h-3" /> Nhấn vào đoạn này để {isThisChunkActive && isPlaying ? "tạm dừng" : "nghe phát thử"}
                 </span>
                 {isChunkReady && (
                   <span className="text-emerald-400 flex items-center gap-1">

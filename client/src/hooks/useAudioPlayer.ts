@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { TextChunk } from "../types";
+import type { TextChunk } from "../types";
 
 interface UseAudioPlayerProps {
   chunks: TextChunk[];
@@ -11,7 +11,6 @@ interface UseAudioPlayerProps {
 
 export function useAudioPlayer({
   chunks,
-  defaultVoice,
   autoplayNext,
   repeatMode,
   onChunkSynthesizeNeeded,
@@ -26,7 +25,80 @@ export function useAudioPlayer({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Khởi tạo audio element một lần
+  // Lưu trữ các giá trị mới nhất trong ref để event listener không bị stale closure
+  // và không làm re-run effect tạo mới Audio element
+  const chunksRef = useRef<TextChunk[]>(chunks);
+  const autoplayNextRef = useRef<boolean>(autoplayNext);
+  const repeatModeRef = useRef<"none" | "one" | "all">(repeatMode);
+  const onSynthesizeRef = useRef(onChunkSynthesizeNeeded);
+  const playbackSpeedRef = useRef<number>(playbackSpeed);
+  const isMutedRef = useRef<boolean>(isMuted);
+  const volumeRef = useRef<number>(volume);
+
+  useEffect(() => {
+    chunksRef.current = chunks;
+  }, [chunks]);
+
+  useEffect(() => {
+    autoplayNextRef.current = autoplayNext;
+  }, [autoplayNext]);
+
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    onSynthesizeRef.current = onChunkSynthesizeNeeded;
+  }, [onChunkSynthesizeNeeded]);
+
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+    isMutedRef.current = isMuted;
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
+
+  // Hàm phát một chunk theo index
+  const playChunkByIndex = useCallback(async (index: number) => {
+    const currentList = chunksRef.current;
+    if (!audioRef.current || index < 0 || index >= currentList.length) return;
+
+    const chunk = currentList[index];
+    let audioUrl = chunk.audioUrl;
+
+    // Nếu chunk chưa có audioUrl nhưng có callback yêu cầu tạo
+    if (!audioUrl && onSynthesizeRef.current) {
+      audioUrl = await onSynthesizeRef.current(chunk);
+    }
+
+    if (!audioUrl) return;
+
+    audioRef.current.src = audioUrl;
+    audioRef.current.playbackRate = playbackSpeedRef.current;
+    audioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+    audioRef.current.currentTime = 0;
+
+    setCurrentChunkIndex(index);
+    setCurrentTime(0);
+
+    try {
+      await audioRef.current.play();
+      setIsPlaying(true);
+    } catch (err) {
+      console.error("Playback error:", err);
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // Khởi tạo audio element DUY NHẤT MỘT LẦN khi mount, dọn dẹp khi unmount
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
@@ -37,28 +109,31 @@ export function useAudioPlayer({
     };
 
     const handleEnded = () => {
-      // Xử lý khi kết thúc đoạn
-      if (repeatMode === "one") {
+      // 1. Chế độ lặp lại đoạn đơn
+      if (repeatModeRef.current === "one") {
         audio.currentTime = 0;
         audio.play().catch(() => {});
         return;
       }
 
-      setCurrentChunkIndex((prev) => {
-        if (prev === null) return null;
+      // 2. Chuyển sang đoạn tiếp theo
+      setCurrentChunkIndex((prevIndex) => {
+        if (prevIndex === null) return null;
 
-        const nextIndex = prev + 1;
-        if (nextIndex < chunks.length) {
-          if (autoplayNext) {
+        const currentList = chunksRef.current;
+        const nextIndex = prevIndex + 1;
+
+        if (nextIndex < currentList.length) {
+          if (autoplayNextRef.current) {
             playChunkByIndex(nextIndex);
             return nextIndex;
           } else {
             setIsPlaying(false);
-            return prev;
+            return prevIndex;
           }
         } else {
-          // Đã hết bài
-          if (repeatMode === "all" && chunks.length > 0) {
+          // Đã hết danh sách đoạn
+          if (repeatModeRef.current === "all" && currentList.length > 0) {
             playChunkByIndex(0);
             return 0;
           } else {
@@ -69,62 +144,22 @@ export function useAudioPlayer({
       });
     };
 
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
 
     return () => {
       audio.pause();
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
     };
-  }, [chunks, autoplayNext, repeatMode]);
-
-  // Đồng bộ volume & speed với audio element
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackSpeed;
-    }
-  }, [playbackSpeed]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
-
-  // Hàm phát một chunk theo index
-  const playChunkByIndex = useCallback(
-    async (index: number) => {
-      if (!audioRef.current || index < 0 || index >= chunks.length) return;
-
-      const chunk = chunks[index];
-      let audioUrl = chunk.audioUrl;
-
-      // Nếu chunk chưa có audioUrl nhưng có callback yêu cầu tạo
-      if (!audioUrl && onChunkSynthesizeNeeded) {
-        audioUrl = await onChunkSynthesizeNeeded(chunk);
-      }
-
-      if (!audioUrl) return;
-
-      audioRef.current.src = audioUrl;
-      audioRef.current.playbackRate = playbackSpeed;
-      audioRef.current.volume = isMuted ? 0 : volume;
-      audioRef.current.currentTime = 0;
-
-      setCurrentChunkIndex(index);
-      setCurrentTime(0);
-
-      try {
-        await audioRef.current.play();
-        setIsPlaying(true);
-      } catch (err) {
-        console.error("Playback error:", err);
-        setIsPlaying(false);
-      }
-    },
-    [chunks, playbackSpeed, volume, isMuted, onChunkSynthesizeNeeded]
-  );
+  }, [playChunkByIndex]);
 
   // Toggle Play / Pause
   const togglePlay = useCallback(() => {
@@ -134,9 +169,10 @@ export function useAudioPlayer({
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (currentChunkIndex === null && chunks.length > 0) {
-        // Tìm chunk đầu tiên có audio
-        const firstReady = chunks.findIndex((c) => c.status === "ready" && c.audioUrl);
+      const currentList = chunksRef.current;
+      if (currentChunkIndex === null && currentList.length > 0) {
+        // Tìm chunk đầu tiên có audio sẵn sàng
+        const firstReady = currentList.findIndex((c) => c.status === "ready" && c.audioUrl);
         if (firstReady !== -1) {
           playChunkByIndex(firstReady);
         } else {
@@ -146,7 +182,7 @@ export function useAudioPlayer({
         audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
       }
     }
-  }, [isPlaying, currentChunkIndex, chunks, playChunkByIndex]);
+  }, [isPlaying, currentChunkIndex, playChunkByIndex]);
 
   // Tua thời gian
   const seek = useCallback((timeSec: number) => {
@@ -178,10 +214,11 @@ export function useAudioPlayer({
   }, [currentChunkIndex, playChunkByIndex]);
 
   const nextChunk = useCallback(() => {
-    if (currentChunkIndex !== null && currentChunkIndex < chunks.length - 1) {
+    const currentList = chunksRef.current;
+    if (currentChunkIndex !== null && currentChunkIndex < currentList.length - 1) {
       playChunkByIndex(currentChunkIndex + 1);
     }
-  }, [currentChunkIndex, chunks.length, playChunkByIndex]);
+  }, [currentChunkIndex, playChunkByIndex]);
 
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);

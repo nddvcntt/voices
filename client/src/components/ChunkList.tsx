@@ -1,5 +1,5 @@
 import React from "react";
-import { TextChunk, TtsVoice } from "../types";
+import type { TextChunk, TtsVoice } from "../types";
 import {
   Sparkles,
   Play,
@@ -9,7 +9,6 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
-  Volume2,
   Mic
 } from "lucide-react";
 

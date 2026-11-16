@@ -6,6 +6,29 @@ import { mergeAudioBuffers } from "../services/audioMerger.js";
 export const ttsRouter = Router();
 const ttsClient = new TtsClient();
 
+/**
+ * Thực thi các tác vụ bất đồng bộ với giới hạn số luồng đồng thời (Bounded Concurrency)
+ * Đảm bảo kết quả giữ nguyên 100% thứ tự của mảng gốc
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (currentIndex < items.length) {
+      const idx = currentIndex++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 // 1. Lấy danh sách giọng đọc
 ttsRouter.get("/voices", async (_req: Request, res: Response) => {
   try {
@@ -35,7 +58,7 @@ ttsRouter.post("/chunk", (req: Request, res: Response) => {
 
     const totalChars = text.length;
     const totalWords = text.trim().split(/\s+/).filter(Boolean).length;
-    // Ước lượng thời gian đọc: trung bình tiếng Việt đọc khoảng 160-180 từ/phút (~ 3 từ/giây)
+    // Ước lượng thời gian đọc: trung bình tiếng Việt đọc khoảng 160-180 từ/phút (~ 2.7 từ/giây)
     const estimatedSeconds = Math.ceil(totalWords / 2.7);
 
     res.json({
@@ -90,7 +113,7 @@ ttsRouter.post("/synthesize", async (req: Request, res: Response) => {
   }
 });
 
-// 4. Batch synthesis & ghép nối toàn bộ các đoạn thành 1 file MP3 hoàn chỉnh
+// 4. Batch synthesis & ghép nối toàn bộ các đoạn thành 1 file MP3 hoàn chỉnh (Bounded Concurrency = 3)
 ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
   try {
     const { chunks, defaultVoice, speed } = req.body;
@@ -102,13 +125,19 @@ ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
       });
     }
 
-    const audioBuffers: Buffer[] = [];
+    // Lọc các chunk có nội dung hợp lệ
+    const validChunks = chunks.filter((c) => (c.text || "").trim().length > 0);
 
-    // Tổng hợp từng chunk tuần tự hoặc song song có giới hạn
-    for (const chunk of chunks) {
-      const text = (chunk.text || "").trim();
-      if (!text) continue;
+    if (validChunks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Không có đoạn văn bản nào có nội dung để tạo âm thanh"
+      });
+    }
 
+    // Tổng hợp song song 3 luồng (bounded concurrency) giúp tăng tốc gấp 3 lần
+    const audioBuffers = await mapWithConcurrency(validChunks, 3, async (chunk) => {
+      const text = chunk.text.trim();
       const voice = chunk.voice || defaultVoice || "Minh Đức";
       const { buffer } = await ttsClient.synthesize({
         input: text,
@@ -116,16 +145,8 @@ ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
         speed: Number(speed) || 1.0,
         response_format: "mp3",
       });
-
-      audioBuffers.push(buffer);
-    }
-
-    if (audioBuffers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "Không có âm thanh nào được tạo"
-      });
-    }
+      return buffer;
+    });
 
     const mergedBuffer = await mergeAudioBuffers(audioBuffers, "mp3");
 

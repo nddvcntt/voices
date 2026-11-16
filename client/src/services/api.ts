@@ -1,4 +1,4 @@
-import { TtsVoice, TextChunk, ChunkAnalysisResult } from "../types";
+import type { TtsVoice, TextChunk, ChunkAnalysisResult } from "../types";
 
 export const API_BASE = ""; // Relative path through Vite proxy
 
