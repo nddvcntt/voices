@@ -2,6 +2,19 @@
 
 > Nền tảng chuyển đổi văn bản thành giọng nói (Text-to-Speech) thông minh, tự động cắt đoạn tối đa 800 ký tự (chuẩn hết câu ngữ pháp), tích hợp 20 giọng đọc nơ-ron tiếng Việt chất lượng cao (VieNeu-TTS), hiển thị đồng bộ Karaoke trực tiếp và Trình phát nhạc chuyên nghiệp (Pro Audio Player).
 
+## 🌐 Địa Chỉ Truy Cập Dịch Vụ
+
+- **Tên miền chính thức (HTTPS)**: **[https://voice.vcntt.tech](https://voice.vcntt.tech)**
+- **Địa chỉ mạng nội bộ đơn vị**: `http://192.168.0.11:6969`
+- **Kiểm tra trạng thái (Healthcheck)**:
+  ```bash
+  curl https://voice.vcntt.tech/health
+  ```
+  *Kết quả trả về*:
+  ```json
+  {"status":"ok","app":"TheVoice Studio","version":"1.0.0","ttsBaseUrl":"http://vieneu.vcntt.tech/v1"}
+  ```
+
 ---
 
 ## 🌟 Tính Năng Nổi Bật
