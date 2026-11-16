@@ -13,12 +13,17 @@ export interface SentenceItem {
   charCount: number;
   startCharIndex: number;
   endCharIndex: number;
-  // Thời gian ước lượng trong chunk (giây)
   estimatedStartSec?: number;
   estimatedEndSec?: number;
 }
 
 export type ChunkStatus = "idle" | "synthesizing" | "ready" | "error";
+
+export interface ChunkTimeline {
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+}
 
 export interface TextChunk {
   id: string;
@@ -27,14 +32,13 @@ export interface TextChunk {
   charCount: number;
   wordCount: number;
   sentences: SentenceItem[];
-  // Cấu hình riêng cho chunk
   voice?: string;
   status: ChunkStatus;
   errorMessage?: string;
-  // Dữ liệu audio sau khi tổng hợp
   audioUrl?: string;
   audioBlob?: Blob;
   audioDurationSec?: number;
+  timeline?: ChunkTimeline;
 }
 
 export interface ChunkAnalysisResult {
@@ -42,6 +46,14 @@ export interface ChunkAnalysisResult {
   totalChars: number;
   totalWords: number;
   estimatedSeconds: number;
+  chunks: TextChunk[];
+}
+
+export interface BatchMergeResult {
+  fullAudioUrl: string;
+  totalDuration: number;
+  totalChunks: number;
+  readyChunks: number;
   chunks: TextChunk[];
 }
 
@@ -63,4 +75,5 @@ export interface PlayerState {
   volume: number;
   isMuted: boolean;
   speed: number;
+  isFullTrackMode: boolean;
 }

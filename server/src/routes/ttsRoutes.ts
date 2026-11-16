@@ -1,7 +1,10 @@
 import { Router, Request, Response } from "express";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import { TtsClient } from "../services/ttsClient.js";
 import { chunkTextBySentences } from "../services/textChunker.js";
-import { mergeAudioBuffers } from "../services/audioMerger.js";
+import { mergeAudioBuffers, getAudioDuration } from "../services/audioMerger.js";
 
 export const ttsRouter = Router();
 const ttsClient = new TtsClient();
@@ -118,7 +121,154 @@ ttsRouter.post("/synthesize", async (req: Request, res: Response) => {
   }
 });
 
-// 4. Batch synthesis & ghép nối toàn bộ các đoạn thành 1 file MP3 hoàn chỉnh (Bounded Concurrency = 3)
+// 4. TẠO TẤT CẢ & TỰ ĐỘNG GHÉP THÀNH 1 FILE MP3 LIỀN MẠCH (Batch Synthesize & Auto-Merge)
+ttsRouter.post("/batch-synthesize-and-merge", async (req: Request, res: Response) => {
+  try {
+    const { chunks, defaultVoice, speed, temperature } = req.body;
+
+    if (!Array.isArray(chunks) || chunks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Danh sách chunks không được để trống"
+      });
+    }
+
+    const cacheDir = path.resolve(process.cwd(), "cache");
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    const rawSpeed = Number(speed);
+    const safeSpeed = !isNaN(rawSpeed) && rawSpeed > 0 ? rawSpeed : 1.0;
+    const rawTemp = Number(temperature);
+    const safeTemp = !isNaN(rawTemp) && rawTemp > 0 ? rawTemp : 0.8;
+
+    // Bước 1: Tổng hợp âm thanh cho tất cả các chunk với Bounded Concurrency = 3
+    const processedChunks = await mapWithConcurrency(chunks, 3, async (chunk) => {
+      const text = (chunk.text || "").trim();
+      const voice = chunk.voice || defaultVoice || "Minh Đức";
+
+      if (!text) {
+        return {
+          ...chunk,
+          status: "error",
+          errorMessage: "Văn bản rỗng",
+          durationSec: 0,
+        };
+      }
+
+      try {
+        const { buffer } = await ttsClient.synthesize({
+          input: text,
+          voice,
+          speed: safeSpeed,
+          temperature: safeTemp,
+          response_format: "mp3",
+        });
+
+        // Tạo file cache cố định
+        const hash = crypto.createHash("sha256").update(`chunk_${voice}_${safeSpeed}_${text}`).digest("hex");
+        const fileName = `${hash}.mp3`;
+        const filePath = path.join(cacheDir, fileName);
+        if (!fs.existsSync(filePath)) {
+          fs.writeFileSync(filePath, buffer);
+        }
+
+        // Đo thời lượng chính xác
+        const durationSec = await getAudioDuration(buffer, "mp3");
+
+        return {
+          ...chunk,
+          status: "ready",
+          voice,
+          audioUrl: `/audio-cache/${fileName}`,
+          audioDurationSec: durationSec,
+          buffer,
+        };
+      } catch (err: any) {
+        console.error(`Error synthesizing chunk ${chunk.id}:`, err);
+        return {
+          ...chunk,
+          status: "error",
+          errorMessage: err.message || "Lỗi tổng hợp",
+          durationSec: 0,
+        };
+      }
+    });
+
+    // Lọc các buffer hợp lệ để ghép
+    const validBuffers: Buffer[] = [];
+    for (const c of processedChunks) {
+      if (c.buffer && Buffer.isBuffer(c.buffer)) {
+        validBuffers.push(c.buffer);
+      }
+    }
+
+    if (validBuffers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Không có đoạn âm thanh nào được tạo thành công"
+      });
+    }
+
+    // Bước 2: Ghép toàn bộ các buffer MP3 thành 1 file MP3 duy nhất bằng FFmpeg
+    const mergedBuffer = await mergeAudioBuffers(validBuffers, "mp3");
+    const mergedHash = crypto.createHash("sha256").update(Buffer.concat(validBuffers.slice(0, 3))).digest("hex").slice(0, 16);
+    const mergedFileName = `merged_${Date.now()}_${mergedHash}.mp3`;
+    const mergedFilePath = path.join(cacheDir, mergedFileName);
+    fs.writeFileSync(mergedFilePath, mergedBuffer);
+
+    const fullAudioUrl = `/audio-cache/${mergedFileName}`;
+    const totalDuration = await getAudioDuration(mergedBuffer, "mp3");
+
+    // Bước 3: Tính toán timeline offsets cho từng đoạn trong file tổng
+    let accumulatedTime = 0;
+    const resultChunks = processedChunks.map((c) => {
+      const dur = c.audioDurationSec || 0;
+      const startSec = accumulatedTime;
+      const endSec = accumulatedTime + dur;
+      accumulatedTime = endSec;
+
+      return {
+        id: c.id,
+        index: c.index,
+        text: c.text,
+        charCount: c.charCount,
+        wordCount: c.wordCount,
+        sentences: c.sentences,
+        voice: c.voice,
+        status: c.status,
+        errorMessage: c.errorMessage,
+        audioUrl: c.audioUrl,
+        audioDurationSec: dur,
+        timeline: {
+          startSec: Math.round(startSec * 100) / 100,
+          endSec: Math.round(endSec * 100) / 100,
+          durationSec: Math.round(dur * 100) / 100,
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        fullAudioUrl,
+        totalDuration: Math.round(totalDuration * 100) / 100,
+        totalChunks: resultChunks.length,
+        readyChunks: resultChunks.filter(c => c.status === "ready").length,
+        chunks: resultChunks,
+      }
+    });
+  } catch (error: any) {
+    console.error("Batch synthesize and merge error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Lỗi khi tổng hợp và tự động ghép file âm thanh"
+    });
+  }
+});
+
+// 5. Tải file MP3 đã ghép trực tiếp
 ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
   try {
     const { chunks, defaultVoice, speed } = req.body;
@@ -130,9 +280,7 @@ ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
       });
     }
 
-    // Lọc các chunk có nội dung hợp lệ
     const validChunks = chunks.filter((c) => (c.text || "").trim().length > 0);
-
     if (validChunks.length === 0) {
       return res.status(400).json({
         success: false,
@@ -140,7 +288,6 @@ ttsRouter.post("/merge-chunks", async (req: Request, res: Response) => {
       });
     }
 
-    // Tổng hợp song song 3 luồng (bounded concurrency) giúp tăng tốc gấp 3 lần
     const audioBuffers = await mapWithConcurrency(validChunks, 3, async (chunk) => {
       const text = chunk.text.trim();
       const voice = chunk.voice || defaultVoice || "Minh Đức";

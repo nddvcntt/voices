@@ -1,4 +1,4 @@
-import type { TtsVoice, TextChunk, ChunkAnalysisResult } from "../types";
+import type { TtsVoice, TextChunk, ChunkAnalysisResult, BatchMergeResult } from "../types";
 
 export const API_BASE = ""; // Relative path through Vite proxy
 
@@ -99,7 +99,51 @@ export const api = {
   },
 
   /**
-   * Ghép toàn bộ các đoạn thành 1 file MP3 tổng hợp
+   * TẠO TẤT CẢ VÀ TỰ ĐỘNG GHÉP THÀNH 1 FILE MP3 LIỀN MẠCH
+   * Tổng hợp giọng nói cho tất cả các đoạn và dùng FFmpeg nối lại thành 1 file MP3 duy nhất
+   */
+  async batchSynthesizeAndMerge(
+    chunks: TextChunk[],
+    defaultVoice: string,
+    speed: number = 1.0,
+    temperature: number = 0.8
+  ): Promise<BatchMergeResult> {
+    const payloadChunks = chunks.map((c) => ({
+      id: c.id,
+      index: c.index,
+      text: c.text,
+      charCount: c.charCount,
+      wordCount: c.wordCount,
+      sentences: c.sentences,
+      voice: c.voice || defaultVoice,
+    }));
+
+    const res = await fetch(`${API_BASE}/api/batch-synthesize-and-merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chunks: payloadChunks,
+        defaultVoice,
+        speed,
+        temperature,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}: Lỗi khi tạo toàn bộ và ghép âm thanh`);
+    }
+
+    const json = await res.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || "Dữ liệu trả về không hợp lệ");
+    }
+
+    return json.data as BatchMergeResult;
+  },
+
+  /**
+   * Ghép toàn bộ các đoạn thành 1 file MP3 tổng hợp (dạng tải về Blob trực tiếp)
    */
   async mergeChunks(chunks: TextChunk[], defaultVoice: string, speed: number = 1.0): Promise<Blob> {
     const payloadChunks = chunks.map(c => ({

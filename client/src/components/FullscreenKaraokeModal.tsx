@@ -12,6 +12,7 @@ interface FullscreenKaraokeModalProps {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  isFullTrackMode?: boolean;
   onTogglePlay: () => void;
   onPreviousChunk: () => void;
   onNextChunk: () => void;
@@ -26,6 +27,7 @@ export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
   isPlaying,
   currentTime,
   duration,
+  isFullTrackMode = false,
   onTogglePlay,
   onPreviousChunk,
   onNextChunk,
@@ -54,7 +56,15 @@ export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
   if (!isOpen) return null;
 
   const currentChunk = activeChunkIndex !== null ? chunks[activeChunkIndex] : null;
-  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, currentTime, duration);
+  const chunkStartTime = currentChunk?.timeline?.startSec ?? 0;
+  const chunkDuration = currentChunk?.timeline?.durationSec ?? duration;
+  const relativeTime = isFullTrackMode && currentChunk?.timeline
+    ? Math.max(0, currentTime - chunkStartTime)
+    : currentTime;
+  const activeDuration = isFullTrackMode && currentChunk?.timeline
+    ? chunkDuration
+    : duration;
+  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, relativeTime, activeDuration);
 
   return (
     <div className="fixed inset-0 z-50 bg-studio-950/98 backdrop-blur-3xl flex flex-col justify-between overflow-hidden text-slate-100 p-6 md:p-12 animate-in fade-in duration-200">

@@ -31,6 +31,8 @@ export const App: React.FC = () => {
   // 3. UI View States
   const [activeView, setActiveView] = useState<"editor" | "karaoke">("editor");
   const [isSynthesizingAll, setIsSynthesizingAll] = useState<boolean>(false);
+  const [isBatchMerging, setIsBatchMerging] = useState<boolean>(false);
+  const [fullAudioTrack, setFullAudioTrack] = useState<{ fullAudioUrl: string; totalDuration: number } | null>(null);
   const [isDownloadingFull, setIsDownloadingFull] = useState<boolean>(false);
   const [showFullscreenKaraoke, setShowFullscreenKaraoke] = useState<boolean>(false);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
@@ -129,7 +131,11 @@ export const App: React.FC = () => {
     playbackSpeed,
     volume,
     isMuted,
+    isFullTrackMode,
+    fullTrackUrl,
     playChunkByIndex,
+    playFullTrack,
+    switchToChunkMode,
     togglePlay,
     seek,
     rewind5s,
@@ -185,7 +191,45 @@ export const App: React.FC = () => {
     );
   };
 
-  // 9. Tổng hợp giọng nói cho TOÀN BỘ các đoạn
+  // 9. TẠO TẤT CẢ VÀ TỰ ĐỘNG GHÉP THÀNH 1 BÀI MP3 (Batch Synthesize & Auto-Merge)
+  const handleBatchSynthesizeAndMerge = async () => {
+    if (chunks.length === 0 || isBatchMerging) return;
+
+    setIsBatchMerging(true);
+    showToast("Đang tạo giọng nói toàn bộ và dùng FFmpeg tự động ghép thành 1 file MP3 liền mạch...");
+
+    try {
+      const res = await api.batchSynthesizeAndMerge(chunks, defaultVoice, speed, temperature);
+
+      // Cập nhật danh sách chunks mới nhất (đã có audioUrl, status: ready, timeline)
+      setChunks(res.chunks);
+      setFullAudioTrack({
+        fullAudioUrl: res.fullAudioUrl,
+        totalDuration: res.totalDuration,
+      });
+
+      // Tự động phát toàn bài liền mạch
+      await playFullTrack(res.fullAudioUrl, 0);
+
+      showToast(`Đã tạo & ghép xong 1 bài MP3 hoàn chỉnh (${res.totalDuration}s) cho ${res.readyChunks}/${res.totalChunks} đoạn!`);
+
+      // Bắn pháo hoa ăn mừng
+      try {
+        confetti({
+          particleCount: 100,
+          spread: 80,
+          origin: { y: 0.6 },
+        });
+      } catch (e) {}
+    } catch (err: any) {
+      console.error("Batch synthesize and merge error:", err);
+      showToast(err.message || "Lỗi khi tạo và ghép nối âm thanh");
+    } finally {
+      setIsBatchMerging(false);
+    }
+  };
+
+  // 10. Tổng hợp giọng nói riêng lẻ cho TOÀN BỘ các đoạn
   const handleSynthesizeAll = async () => {
     if (chunks.length === 0 || isSynthesizingAll) return;
 
@@ -347,6 +391,18 @@ export const App: React.FC = () => {
                 onSynthesizeChunk={handleSynthesizeSingleChunk}
                 onSynthesizeAll={handleSynthesizeAll}
                 isSynthesizingAll={isSynthesizingAll}
+                onBatchSynthesizeAndMerge={handleBatchSynthesizeAndMerge}
+                isBatchMerging={isBatchMerging}
+                fullAudioUrl={fullAudioTrack?.fullAudioUrl || fullTrackUrl}
+                totalDuration={fullAudioTrack?.totalDuration || duration}
+                isFullTrackMode={isFullTrackMode}
+                onPlayFullTrack={() => {
+                  const targetUrl = fullAudioTrack?.fullAudioUrl || fullTrackUrl;
+                  if (targetUrl) {
+                    playFullTrack(targetUrl, 0);
+                  }
+                }}
+                onSwitchToChunkMode={switchToChunkMode}
                 activeChunkIndex={currentChunkIndex}
                 isPlaying={isPlaying}
                 onPlayChunk={playChunkByIndex}
@@ -364,6 +420,7 @@ export const App: React.FC = () => {
             isPlaying={isPlaying}
             currentTime={currentTime}
             duration={duration}
+            isFullTrackMode={isFullTrackMode}
             onPlayChunk={playChunkByIndex}
             onTogglePlay={togglePlay}
             onOpenFullscreen={() => setShowFullscreenKaraoke(true)}
@@ -384,6 +441,8 @@ export const App: React.FC = () => {
         isMuted={isMuted}
         repeatMode={repeatMode}
         autoplayNext={autoplayNext}
+        isFullTrackMode={isFullTrackMode}
+        fullTrackUrl={fullAudioTrack?.fullAudioUrl || fullTrackUrl}
         onTogglePlay={togglePlay}
         onSeek={seek}
         onPreviousChunk={previousChunk}
@@ -413,6 +472,7 @@ export const App: React.FC = () => {
         isPlaying={isPlaying}
         currentTime={currentTime}
         duration={duration}
+        isFullTrackMode={isFullTrackMode}
         onTogglePlay={togglePlay}
         onPreviousChunk={previousChunk}
         onNextChunk={nextChunk}

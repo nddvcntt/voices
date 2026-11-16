@@ -18,6 +18,7 @@ interface KaraokeViewProps {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  isFullTrackMode?: boolean;
   onPlayChunk: (index: number) => void;
   onTogglePlay: () => void;
   onOpenFullscreen: () => void;
@@ -29,6 +30,7 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
   isPlaying,
   currentTime,
   duration,
+  isFullTrackMode = false,
   onPlayChunk,
   onTogglePlay,
   onOpenFullscreen,
@@ -61,7 +63,15 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
 
   // Tính câu nào đang được đọc trong chunk hiện tại
   const currentChunk = activeChunkIndex !== null ? chunks[activeChunkIndex] : null;
-  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, currentTime, duration);
+  const chunkStartTime = currentChunk?.timeline?.startSec ?? 0;
+  const chunkDuration = currentChunk?.timeline?.durationSec ?? duration;
+  const relativeTime = isFullTrackMode && currentChunk?.timeline
+    ? Math.max(0, currentTime - chunkStartTime)
+    : currentTime;
+  const activeDuration = isFullTrackMode && currentChunk?.timeline
+    ? chunkDuration
+    : duration;
+  const activeSentenceIndex = findActiveSentenceIndex(currentChunk, relativeTime, activeDuration);
 
   return (
     <div className="bg-studio-900/70 rounded-2xl border border-studio-800 p-6 backdrop-blur-xl space-y-5">

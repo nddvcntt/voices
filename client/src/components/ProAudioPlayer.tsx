@@ -30,6 +30,8 @@ interface ProAudioPlayerProps {
   isMuted: boolean;
   repeatMode: "none" | "one" | "all";
   autoplayNext: boolean;
+  isFullTrackMode?: boolean;
+  fullTrackUrl?: string | null;
   onTogglePlay: () => void;
   onSeek: (time: number) => void;
   onPreviousChunk: () => void;
@@ -58,6 +60,8 @@ export const ProAudioPlayer: React.FC<ProAudioPlayerProps> = ({
   isMuted,
   repeatMode,
   autoplayNext,
+  isFullTrackMode = false,
+  fullTrackUrl,
   onTogglePlay,
   onSeek,
   onPreviousChunk,
@@ -100,12 +104,20 @@ export const ProAudioPlayer: React.FC<ProAudioPlayerProps> = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h4 className="text-xs font-bold text-white truncate">
-                {currentChunk
+                {isFullTrackMode
+                  ? `🎵 Toàn Bài (Đoạn ${(currentChunkIndex ?? 0) + 1}/${totalChunks})`
+                  : currentChunk
                   ? `Đoạn ${(currentChunkIndex ?? 0) + 1} / ${totalChunks}`
                   : "Chưa chọn đoạn phát"}
               </h4>
-              <span className="text-3xs uppercase px-1.5 py-0.2 rounded font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30">
-                PRO
+              <span
+                className={`text-3xs uppercase px-1.5 py-0.2 rounded font-bold border ${
+                  isFullTrackMode
+                    ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                    : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                }`}
+              >
+                {isFullTrackMode ? "FULL TRACK" : "PRO"}
               </span>
             </div>
             <p className="text-2xs text-slate-400 truncate">
@@ -307,16 +319,30 @@ export const ProAudioPlayer: React.FC<ProAudioPlayerProps> = ({
           </div>
 
           {/* Download Full Track */}
-          <button
-            type="button"
-            disabled={isDownloadingFull || totalChunks === 0}
-            onClick={onDownloadFullTrack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold bg-studio-800 hover:bg-studio-700 text-slate-200 hover:text-white border border-studio-700 disabled:opacity-40 transition shadow-sm"
-            title="Tải toàn bộ bài đọc thành 1 tệp MP3 hoàn chỉnh"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Tải trọn bài (.MP3)</span>
-          </button>
+          {fullTrackUrl ? (
+            <a
+              href={fullTrackUrl}
+              download={`TheVoice_FullTrack_${Date.now()}.mp3`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold bg-studio-800 hover:bg-studio-700 text-slate-200 hover:text-white border border-studio-700 transition shadow-sm"
+              title="Tải toàn bộ bài đọc MP3 đã ghép liền mạch"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden xl:inline">Tải trọn bài (.MP3)</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled={isDownloadingFull || totalChunks === 0}
+              onClick={onDownloadFullTrack}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-2xs font-bold bg-studio-800 hover:bg-studio-700 text-slate-200 hover:text-white border border-studio-700 disabled:opacity-40 transition shadow-sm"
+              title="Ghép và tải toàn bộ bài đọc thành 1 tệp MP3 hoàn chỉnh"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">
+                {isDownloadingFull ? "Đang ghép..." : "Tải trọn bài (.MP3)"}
+              </span>
+            </button>
+          )}
 
           {/* Cinema Stage Teleprompter */}
           <button

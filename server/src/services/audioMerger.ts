@@ -7,6 +7,33 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 /**
+ * Đo thời lượng (giây) của một file âm thanh bằng ffprobe
+ */
+export async function getAudioDuration(buffer: Buffer, format: "mp3" = "mp3"): Promise<number> {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thevoice-probe-"));
+  const tempFile = path.join(tempDir, `sample.${format}`);
+
+  try {
+    fs.writeFileSync(tempFile, buffer);
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      tempFile
+    ]);
+
+    const dur = parseFloat(stdout.trim());
+    return !isNaN(dur) && dur > 0 ? dur : 0;
+  } catch (err) {
+    // Fallback: Ước lượng theo kích thước buffer cho MP3 128kbps (~16KB/s)
+    const estimated = buffer.length / 16000;
+    return Math.max(1, Math.round(estimated * 10) / 10);
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+
+/**
  * Ghép nhiều file audio MP3 thành 1 file duy nhất bằng ffmpeg concat
  */
 export async function mergeAudioBuffers(
