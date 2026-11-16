@@ -1,0 +1,12 @@
+serverAddr = "45.117.171.156"
+serverPort = 7000
+
+[[proxies]]
+name = "thevoice-http"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 6969
+customDomains = ["voice.vcntt.tech"]
+
+[proxies.requestHeaders.set]
+X-Forwarded-Proto = "https"
