@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  thevoice:
+    container_name: thevoice_studio
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "6969:6969"
+    environment:
+      - PORT=6969
+      - TTS_BASE_URL=http://vieneu.vcntt.tech/v1
+      - NODE_ENV=production
+    volumes:
+      - thevoice_cache:/app/server/cache
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6969/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  thevoice_cache:
+    name: thevoice_cache
