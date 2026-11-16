@@ -7,6 +7,7 @@
 const ABBREVIATIONS = new Set([
   "gs", "pgs", "ts", "ths", "bs", "thầy", "cô", "đ/c", "đc", "tp", "tt",
   "q", "p", "tx", "hđnd", "ubnd", "bch", "tw", "bt", "ttg", "pbt",
+  "hn", "hcm", "đh", "thpt", "thcs", "nxb", "cty", "tnhh", "cp",
   "mr", "mrs", "ms", "dr", "prof", "st", "inc", "ltd", "corp",
   "eg", "ie", "vs", "vol", "no", "approx", "dept", "est"
 ]);
@@ -97,12 +98,8 @@ function splitParagraph(paragraph: string): string[] {
           .toLowerCase();
 
         if (ABBREVIATIONS.has(lastWord)) {
-          // Là từ viết tắt, không tách câu trừ khi sau đó là chữ hoa và cách một khoảng trắng dài
-          const followingText = paragraph.slice(i + 1).trimStart();
-          const firstNextChar = followingText[0] || "";
-          if (!/^\s+[A-ZÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ]/.test(paragraph.slice(i + 1))) {
-            continue;
-          }
+          // Là từ viết tắt (học hàm, chức danh, địa danh, xưng hô), không bao giờ coi dấu chấm là kết thúc câu
+          continue;
         }
       }
 

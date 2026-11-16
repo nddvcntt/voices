@@ -22,6 +22,7 @@ interface KaraokeViewProps {
   onPlayChunk: (index: number) => void;
   onTogglePlay: () => void;
   onOpenFullscreen: () => void;
+  onSeekToSentence?: (chunkIndex: number, sentenceIndex: number) => void;
 }
 
 export const KaraokeView: React.FC<KaraokeViewProps> = ({
@@ -34,6 +35,7 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
   onPlayChunk,
   onTogglePlay,
   onOpenFullscreen,
+  onSeekToSentence,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const activeChunkRef = useRef<HTMLDivElement | null>(null);
@@ -206,12 +208,21 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
                     return (
                       <span
                         key={sentence.index}
-                        className={`inline-block py-1 px-2 my-0.5 rounded-lg text-sm transition-all duration-200 ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSeekToSentence) {
+                            onSeekToSentence(chunkIdx, sIdx);
+                          } else if (isChunkReady) {
+                            onPlayChunk(chunkIdx);
+                          }
+                        }}
+                        title="Nhấp để nghe đọc từ câu này"
+                        className={`inline-block py-1 px-2 my-0.5 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
                           isSentenceActive
-                            ? "karaoke-active-sentence font-bold text-base scale-[1.02] shadow-sm"
+                            ? "karaoke-active-sentence font-bold text-base scale-[1.02] shadow-sm ring-1 ring-amber-400/40"
                             : isThisChunkActive
-                            ? "text-slate-200 hover:text-white"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "text-slate-200 hover:text-white hover:bg-white/10"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                         }`}
                       >
                         {sentence.text}{" "}

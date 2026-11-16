@@ -17,6 +17,7 @@ interface FullscreenKaraokeModalProps {
   onPreviousChunk: () => void;
   onNextChunk: () => void;
   onPlayChunk: (index: number) => void;
+  onSeekToSentence?: (chunkIndex: number, sentenceIndex: number) => void;
 }
 
 export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
@@ -32,6 +33,7 @@ export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
   onPreviousChunk,
   onNextChunk,
   onPlayChunk,
+  onSeekToSentence,
 }) => {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
@@ -128,12 +130,21 @@ export const FullscreenKaraokeModal: React.FC<FullscreenKaraokeModalProps> = ({
                     return (
                       <span
                         key={sentence.index}
-                        className={`inline-block py-1.5 px-3 my-1 rounded-xl transition-all duration-300 ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSeekToSentence) {
+                            onSeekToSentence(cIdx, sIdx);
+                          } else {
+                            onPlayChunk(cIdx);
+                          }
+                        }}
+                        title="Nhấp để nghe từ câu này"
+                        className={`inline-block py-1.5 px-3 my-1 rounded-xl transition-all duration-300 cursor-pointer ${
                           isSentenceActive
                             ? "bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-400/40 scale-105"
                             : isThisActive
-                            ? "text-slate-200"
-                            : "text-slate-500"
+                            ? "text-slate-200 hover:text-white hover:bg-white/10"
+                            : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
                         }`}
                       >
                         {sentence.text}{" "}

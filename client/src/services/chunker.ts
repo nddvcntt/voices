@@ -3,8 +3,9 @@ import type { TextChunk, SentenceItem } from "../types";
 const ABBREVIATIONS = new Set([
   "gs", "pgs", "ts", "ths", "bs", "thầy", "cô", "đ/c", "đc", "tp", "tt",
   "q", "p", "tx", "hđnd", "ubnd", "bch", "tw", "bt", "ttg", "pbt",
+  "hn", "hcm", "đh", "thpt", "thcs", "nxb", "cty", "tnhh", "cp",
   "mr", "mrs", "ms", "dr", "prof", "st", "inc", "ltd", "corp",
-  "eg", "ie", "vs", "vol", "no"
+  "eg", "ie", "vs", "vol", "no", "approx", "dept", "est"
 ]);
 
 export function localSplitSentences(text: string): string[] {

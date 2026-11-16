@@ -136,6 +136,7 @@ export const App: React.FC = () => {
     playChunkByIndex,
     playFullTrack,
     switchToChunkMode,
+    seekToSentence,
     togglePlay,
     seek,
     rewind5s,
@@ -159,6 +160,13 @@ export const App: React.FC = () => {
 
     setIsChunking(true);
     try {
+      // Thu hồi các Object URL blob cũ nếu có để tránh rò rỉ bộ nhớ
+      chunks.forEach((c) => {
+        if (c.audioUrl && c.audioUrl.startsWith("blob:")) {
+          try { URL.revokeObjectURL(c.audioUrl); } catch {}
+        }
+      });
+
       // Gọi API server để phân tích và cắt câu
       const res = await api.chunkText(text, targetMaxChars);
       const generatedChunks = res.chunks.map((c) => ({
@@ -424,6 +432,7 @@ export const App: React.FC = () => {
             onPlayChunk={playChunkByIndex}
             onTogglePlay={togglePlay}
             onOpenFullscreen={() => setShowFullscreenKaraoke(true)}
+            onSeekToSentence={seekToSentence}
           />
         )}
       </main>
@@ -477,6 +486,7 @@ export const App: React.FC = () => {
         onPreviousChunk={previousChunk}
         onNextChunk={nextChunk}
         onPlayChunk={playChunkByIndex}
+        onSeekToSentence={seekToSentence}
       />
 
       {/* Shortcuts Guide Modal */}

@@ -127,6 +127,7 @@ print("\n[5/5] Kiểm tra trạng thái và Healthcheck...")
 run_command("docker ps | grep thevoice")
 run_command("curl -fsS http://localhost:6969/health && echo ''")
 run_command("curl -fsS -I http://localhost:6969/")
+run_command("curl -fsS https://voice.vcntt.tech/health && echo ''")
 
 try:
     session.delete(f"{term_url}/{term_name}", headers=headers, timeout=5)
@@ -135,4 +136,4 @@ except Exception:
 ws.close()
 
 print("\n🎉 HOÀN TẤT TRIỂN KHAI THEVOICE TRÊN SERVERTEST!")
-print("🌐 Truy cập hệ thống tại: http://192.168.0.11:6969")
+print("🌐 Truy cập hệ thống tại: https://voice.vcntt.tech/")

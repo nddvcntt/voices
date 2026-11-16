@@ -77,6 +77,23 @@ export function useAudioPlayer({
     fullTrackUrlRef.current = fullTrackUrl;
   }, [fullTrackUrl]);
 
+  // Hàm gán thời gian audio an toàn (kể cả khi metadata chưa load)
+  const setAudioTimeSafely = useCallback((targetTime: number) => {
+    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (audio.readyState >= 1) {
+      audio.currentTime = targetTime;
+      setCurrentTime(targetTime);
+    } else {
+      const onLoaded = () => {
+        audio.currentTime = targetTime;
+        setCurrentTime(targetTime);
+        audio.removeEventListener("loadedmetadata", onLoaded);
+      };
+      audio.addEventListener("loadedmetadata", onLoaded);
+    }
+  }, []);
+
   // Hàm phát TOÀN BỘ BÀI ĐỌC (Full Merged Track)
   const playFullTrack = useCallback(async (url: string, startFromSec: number = 0) => {
     if (!audioRef.current || !url) return;
@@ -94,7 +111,8 @@ export function useAudioPlayer({
 
     audioRef.current.playbackRate = playbackSpeedRef.current;
     audioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
-    audioRef.current.currentTime = startFromSec;
+
+    setAudioTimeSafely(startFromSec);
 
     // Xác định chunk index tại startFromSec
     const currentList = chunksRef.current;
@@ -106,7 +124,6 @@ export function useAudioPlayer({
       if (foundIdx !== -1) targetIndex = foundIdx;
     }
     setCurrentChunkIndex(targetIndex);
-    setCurrentTime(startFromSec);
 
     try {
       await audioRef.current.play();
@@ -115,7 +132,7 @@ export function useAudioPlayer({
       console.error("Play full track error:", err);
       setIsPlaying(false);
     }
-  }, []);
+  }, [setAudioTimeSafely]);
 
   // Hàm phát một chunk theo index
   const playChunkByIndex = useCallback(async (index: number) => {
@@ -356,6 +373,34 @@ export function useAudioPlayer({
     }
   }, [currentChunkIndex, playChunkByIndex, seek]);
 
+  // Nhảy trực tiếp đến vị trí một câu trong một đoạn
+  const seekToSentence = useCallback(async (chunkIndex: number, sentenceIndex: number) => {
+    const currentList = chunksRef.current;
+    if (chunkIndex < 0 || chunkIndex >= currentList.length) return;
+    const chunk = currentList[chunkIndex];
+    if (!chunk || !chunk.sentences || sentenceIndex < 0 || sentenceIndex >= chunk.sentences.length) return;
+
+    const sentence = chunk.sentences[sentenceIndex];
+    const totalChars = Math.max(1, chunk.charCount);
+    const charRatio = sentence.startCharIndex / totalChars;
+    const chunkDuration = chunk.audioDurationSec || (chunk.timeline?.durationSec) || Math.ceil(chunk.wordCount / 2.7);
+    const sentenceRelativeSec = Math.max(0, charRatio * chunkDuration);
+
+    if (isFullTrackModeRef.current && fullTrackUrlRef.current && chunk.timeline) {
+      const targetSec = chunk.timeline.startSec + sentenceRelativeSec;
+      seek(targetSec);
+      setCurrentChunkIndex(chunkIndex);
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+      }
+    } else {
+      if (currentChunkIndex !== chunkIndex) {
+        await playChunkByIndex(chunkIndex);
+      }
+      seek(sentenceRelativeSec);
+    }
+  }, [currentChunkIndex, playChunkByIndex, seek]);
+
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
   }, []);
@@ -374,6 +419,7 @@ export function useAudioPlayer({
     playChunkByIndex,
     playFullTrack,
     switchToChunkMode,
+    seekToSentence,
     togglePlay,
     seek,
     rewind5s,

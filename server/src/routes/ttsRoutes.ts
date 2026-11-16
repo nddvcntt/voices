@@ -32,6 +32,33 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/**
+ * Tự động dọn dẹp các tệp ghép tạm cũ hơn 24 giờ trong thư mục cache
+ */
+async function cleanupOldMergedFiles(cacheDir: string, maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
+  try {
+    if (!fs.existsSync(cacheDir)) return;
+    const now = Date.now();
+    const files = await fs.promises.readdir(cacheDir);
+
+    for (const file of files) {
+      if (file.startsWith("merged_") && file.endsWith(".mp3")) {
+        const fullPath = path.join(cacheDir, file);
+        try {
+          const stats = await fs.promises.stat(fullPath);
+          if (now - stats.mtimeMs > maxAgeMs) {
+            await fs.promises.unlink(fullPath);
+          }
+        } catch {
+          // Bỏ qua lỗi stat/unlink của file riêng lẻ
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Cleanup cache directory error:", err);
+  }
+}
+
 // 1. Lấy danh sách giọng đọc
 ttsRouter.get("/voices", async (_req: Request, res: Response) => {
   try {
@@ -222,12 +249,25 @@ ttsRouter.post("/batch-synthesize-and-merge", async (req: Request, res: Response
     const totalDuration = await getAudioDuration(mergedBuffer, "mp3");
 
     // Bước 3: Tính toán timeline offsets cho từng đoạn trong file tổng
+    // Chỉ tính offset cho các chunk thực sự đã được đưa vào file MP3 tổng (status === 'ready')
     let accumulatedTime = 0;
     const resultChunks = processedChunks.map((c) => {
-      const dur = c.audioDurationSec || 0;
-      const startSec = accumulatedTime;
-      const endSec = accumulatedTime + dur;
-      accumulatedTime = endSec;
+      const isReady = c.status === "ready" && Boolean(c.audioUrl) && Boolean(c.buffer);
+      const dur = isReady ? (c.audioDurationSec || 0) : 0;
+
+      let timeline: { startSec: number; endSec: number; durationSec: number } | undefined = undefined;
+
+      if (isReady && dur > 0) {
+        const startSec = accumulatedTime;
+        const endSec = accumulatedTime + dur;
+        accumulatedTime = endSec;
+
+        timeline = {
+          startSec: Math.round(startSec * 100) / 100,
+          endSec: Math.round(endSec * 100) / 100,
+          durationSec: Math.round(dur * 100) / 100,
+        };
+      }
 
       return {
         id: c.id,
@@ -241,13 +281,12 @@ ttsRouter.post("/batch-synthesize-and-merge", async (req: Request, res: Response
         errorMessage: c.errorMessage,
         audioUrl: c.audioUrl,
         audioDurationSec: dur,
-        timeline: {
-          startSec: Math.round(startSec * 100) / 100,
-          endSec: Math.round(endSec * 100) / 100,
-          durationSec: Math.round(dur * 100) / 100,
-        }
+        timeline,
       };
     });
+
+    // Dọn dẹp các file merged tạm cũ hơn 24 giờ trong background (không chặn response)
+    cleanupOldMergedFiles(cacheDir).catch((e) => console.warn("Cache cleanup warning:", e));
 
     res.json({
       success: true,
