@@ -16,7 +16,7 @@ services:
     volumes:
       - thevoice_cache:/app/server/cache
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6969/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:6969/health"]
       interval: 15s
       timeout: 5s
       retries: 3
