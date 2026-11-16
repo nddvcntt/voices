@@ -92,11 +92,16 @@ ttsRouter.post("/synthesize", async (req: Request, res: Response) => {
       });
     }
 
+    const rawSpeed = Number(speed);
+    const safeSpeed = !isNaN(rawSpeed) && rawSpeed > 0 ? rawSpeed : 1.0;
+    const rawTemp = Number(temperature);
+    const safeTemp = !isNaN(rawTemp) && rawTemp > 0 ? rawTemp : 0.8;
+
     const { buffer, contentType, cached } = await ttsClient.synthesize({
       input: content,
       voice: voice || "Minh Đức",
-      speed: Number(speed) || 1.0,
-      temperature: Number(temperature) ?? 0.8,
+      speed: safeSpeed,
+      temperature: safeTemp,
       response_format: response_format === "wav" ? "wav" : "mp3",
     });
 

@@ -121,9 +121,11 @@ export class TtsClient {
     }
 
     const voice = options.voice || "Minh Đức";
-    const speed = Math.max(0.5, Math.min(2.0, options.speed ?? 1.0));
+    const rawSpeed = Number(options.speed);
+    const speed = !isNaN(rawSpeed) && rawSpeed > 0 ? Math.max(0.5, Math.min(2.0, rawSpeed)) : 1.0;
     const format = options.response_format || "mp3";
-    const temperature = options.temperature ?? 0.8;
+    const rawTemp = Number(options.temperature);
+    const temperature = !isNaN(rawTemp) && rawTemp > 0 ? rawTemp : 0.8;
     const model = options.model || "vieneu-tts-v3-turbo";
 
     const key = `${model}_${voice}_${speed}_${format}_${temperature}_${text}`;
